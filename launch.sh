@@ -20,18 +20,12 @@ if [ ! -d "/data/plugins" ]; then
     log "Created plugins directory..."
     touch /data/plugins/place_custom_plugins_here
 else
-    log "Plugins directory already exists."
+    log "Plugins directory exists, skipping setup..."
 fi
 
 # Start Broadway daemon and log output
 log "Starting Broadway daemon..."
-broadwayd :5 > >(while IFS= read -r line; do log "$line"; done) 2>&1 &
-
-# Export environment variables
-export GDK_BACKEND=broadway
-export BROADWAY_DISPLAY=:5
-export NICOTINE_GTK_VERSION=3
-export NO_AT_BRIDGE=1
+gtk4-broadwayd :5 > >(while IFS= read -r line; do log "$line"; done) 2>&1 &
 
 # Define config file paths
 CONFIG_FILE="/home/nicotine/.config/nicotine/config"
@@ -63,19 +57,23 @@ shopt -s nocasematch
 if [[ -n "${DARKMODE}" ]]; then
     if [[ "${DARKMODE}" == "False" ]]; then
         sed -i "s/dark_mode =.*/dark_mode = False/g" "$CONFIG_FILE"
-        export GTK_THEME=Adwaita:light
     else
         sed -i "s/dark_mode =.*/dark_mode = True/g" "$CONFIG_FILE"
-        export GTK_THEME=Adwaita:dark
     fi
 else
     log "DARKMODE not set, using default (dark)."
     sed -i "s/dark_mode =.*/dark_mode = True/g" "$CONFIG_FILE"
-    export GTK_THEME=Adwaita:dark
 fi
 
 shopt -u nocasematch
 
-# Launch Nicotine+ as the nicotine user
+# Start the DBus session
+eval "$(dbus-launch --sh-syntax)"
+export DBUS_SESSION_BUS_ADDRESS
+export DBUS_SESSION_BUS_PID
+
 log "Starting Nicotine+..."
-exec nicotine
+exec nicotine --isolated 2> >(
+    grep -v "Broken accounting" |
+    grep -v "GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER"
+)
